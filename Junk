@@ -1,0 +1,261 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, ArrowRight, Phone, AlertTriangle } from "lucide-react";
+import { createClient } from "@metagptx/web-sdk";
+
+const client = createClient();
+
+const JUNK_TYPES = ["Furniture", "Appliances", "Yard Debris", "Cleanouts", "Other"];
+const LOAD_SIZES = [
+  { label: "Small", desc: "About 1/4 truck", priceLow: 100, priceHigh: 150 },
+  { label: "Medium", desc: "About 1/2 truck", priceLow: 150, priceHigh: 300 },
+  { label: "Large", desc: "Full truck", priceLow: 300, priceHigh: 500 },
+];
+
+export default function Estimate() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    zip_code: "",
+    junk_type: "",
+    load_size: "",
+  });
+
+  const update = (field: string, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const selectedLoad = LOAD_SIZES.find((l) => l.label === form.load_size);
+
+  const handleSubmit = async () => {
+    if (!selectedLoad) return;
+    setLoading(true);
+    try {
+      await client.entities.estimate_submissions.create({
+        data: {
+          name: form.name,
+          phone: form.phone,
+          zip_code: form.zip_code,
+          junk_type: form.junk_type,
+          load_size: form.load_size,
+          price_low: selectedLoad.priceLow,
+          price_high: selectedLoad.priceHigh,
+        },
+      });
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Estimate submission failed:", err);
+      setSubmitted(true); // Still show results even if save fails
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBookNow = () => {
+    const params = new URLSearchParams({
+      name: form.name,
+      phone: form.phone,
+      zip_code: form.zip_code,
+      junk_type: form.junk_type,
+      load_size: form.load_size,
+    });
+    navigate(`/booking?${params.toString()}`);
+  };
+
+  if (submitted && selectedLoad) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4">
+        <div className="max-w-lg mx-auto">
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-green-700">Your Estimate</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-gray-900">
+                  ${selectedLoad.priceLow} – ${selectedLoad.priceHigh}
+                </div>
+                <p className="text-gray-500 mt-1">
+                  for a {form.load_size.toLowerCase()} load of {form.junk_type.toLowerCase()}
+                </p>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex gap-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-yellow-800">
+                  These are rough estimates only. For a more precise quote, text us photos of your items at{" "}
+                  <a href="sms:+12566909637" className="font-bold underline">(256) 690-9637</a>.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button
+                  size="lg"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleBookNow}
+                >
+                  Book Your Pickup
+                </Button>
+                <a href="tel:+12566909637" className="w-full">
+                  <Button size="lg" variant="outline" className="w-full border-green-600 text-green-600 hover:bg-green-50">
+                    <Phone className="mr-2 h-4 w-4" /> Call to Confirm
+                  </Button>
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-lg mx-auto">
+        {/* Progress */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`h-2 flex-1 rounded-full ${
+                s <= step ? "bg-green-600" : "bg-gray-200"
+              }`}
+            />
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">
+              {step === 1 && "Your Contact Info"}
+              {step === 2 && "What Needs Removing?"}
+              {step === 3 && "How Much Junk?"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {step === 1 && (
+              <>
+                <div>
+                  <Label htmlFor="name">Your Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="John Smith"
+                    value={form.name}
+                    onChange={(e) => update("name", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="(256) 690-9637"
+                    value={form.phone}
+                    onChange={(e) => update("phone", e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <div>
+                  <Label htmlFor="zip">ZIP Code</Label>
+                  <Input
+                    id="zip"
+                    placeholder="35801"
+                    maxLength={5}
+                    value={form.zip_code}
+                    onChange={(e) => update("zip_code", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Type of Junk</Label>
+                  <div className="grid grid-cols-1 gap-2 mt-2">
+                    {JUNK_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => update("junk_type", type)}
+                        className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-colors ${
+                          form.junk_type === type
+                            ? "border-green-600 bg-green-50 text-green-700 font-semibold"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <Label>Estimated Load Size</Label>
+                <div className="space-y-3 mt-2">
+                  {LOAD_SIZES.map((ls) => (
+                    <button
+                      key={ls.label}
+                      onClick={() => update("load_size", ls.label)}
+                      className={`w-full text-left px-4 py-4 rounded-lg border-2 transition-colors ${
+                        form.load_size === ls.label
+                          ? "border-green-600 bg-green-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-semibold text-gray-900">{ls.label}</div>
+                          <div className="text-sm text-gray-500">{ls.desc}</div>
+                        </div>
+                        <div className="text-green-700 font-bold">
+                          ${ls.priceLow}–${ls.priceHigh}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              {step > 1 && (
+                <Button variant="outline" onClick={() => setStep(step - 1)} className="flex-1">
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+              )}
+              {step < 3 ? (
+                <Button
+                  onClick={() => setStep(step + 1)}
+                  disabled={
+                    (step === 1 && (!form.name || !form.phone)) ||
+                    (step === 2 && (!form.zip_code || !form.junk_type))
+                  }
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Next <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!form.load_size || loading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {loading ? "Calculating..." : "Get My Estimate"}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
